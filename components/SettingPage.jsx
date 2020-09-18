@@ -141,10 +141,8 @@ class SettingPage extends React.Component {
         if (!this.state.loggedIn) {return <Redirect to='/login' />;}
 
         return (
-            <div>
-                <Navbar dp={this.props.user ?
-                    this.props.user.dp :
-                    'http://localhost:8000/account_circle.png'} />
+            <main>
+                <Navbar user={this.props.user} />
                 <div className="row" style={{ marginTop: '70px' }}>
                     <div className="col-4 col-gap-8" >
                         <h2> Upload your profile image </h2>
@@ -190,7 +188,7 @@ class SettingPage extends React.Component {
                         </div>
                     </div>
                 </div>
-            </div>
+            </main>
         );
     }
 }

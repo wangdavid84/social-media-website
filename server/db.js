@@ -138,11 +138,11 @@ exports.uploadProfileImage = async(username, profileImage) => {
         const collection = client.db('db').collection('users');
 
         const result = await collection.findOneAndUpdate({ username },
-            { profileImage: profileImage });
+            { profileImage });
 
         return result;
     });
-}
+};
 /**
  * Gets all the posts by the user's friends and the user himself.
  * @param {string} username - Username decoded from token
@@ -202,13 +202,14 @@ exports.updatePrivacyPreferences = async(username, to) => {
         if (err) throw err;
 
         const collection = client.db('db').collection('users');
-        const result = await collection.findOneAndUpdate({ username },
-            { privacy: to });
+        await collection.findOneAndUpdate({ username },
+            { $set: { privacy: to } },
+            { returnNewDocument: false });
 
         if (to !== 'private') {await searchUtils.index('social.io', 'users', { username });}
         else {await searchUtils.deleteDoc('social.io', 'users', username);}
 
-        return result;
+        return { success: true };
     });
 };
 
@@ -229,7 +230,7 @@ exports.updatePassword = async(username, pwd) => {
         if (!hash) return false;
 
         const result = await collection.findOneAndUpdate({ username },
-            { password: hash });
+            { $set: { password: hash } });
 
         return result;
     });
@@ -276,6 +277,38 @@ exports.getPrivacyMode = async username => {
                 dp: 0,
                 privacy: 1
             });
+
+        return result;
+    });
+};
+
+/**
+ * Deletes a user from the database.
+ * @param {string} username - The username of the user to delete.
+ */
+exports.deleteUser = async username => {
+    const client = new MongoClient(uri, { useNewUrlParser: true });
+    client.connect(async err => {
+        if (err) throw err;
+
+        const collection = client.db('db').collection('users');
+        const result = await collection.deleteOne({ username });
+
+        return { success: result.acknowledged };
+    });
+};
+
+/**
+ * Fetches user details.
+ * @param {string} username - The username
+ */
+exports.getUserDetails = async username => {
+    const client = new MongoClient(uri, { useNewUrlParser: true });
+    client.connect(async err => {
+        if (err) throw err;
+
+        const collection = client.db('db').collection('users');
+        const result = await collection.findOne({ username });
 
         return result;
     });

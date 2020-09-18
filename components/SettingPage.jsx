@@ -2,15 +2,15 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import Navbar from './Navbar.jsx';
 import Avatar from 'react-avatar-edit';
-import Switch from 'react-switch';
-import { useAlert } from 'react-alert';
-const owasp = require("owasp-password-strength-test");
+import { withAlert } from 'react-alert';
+import { Redirect } from 'react-router-dom';
+const owasp = require('owasp-password-strength-test');
 
 class SettingPage extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
-        	loggedIn: true,
+            loggedIn: true,
             preview: null,
             checked: false
         };
@@ -23,10 +23,13 @@ class SettingPage extends React.Component {
         this.onUploadClick = this.onUploadClick.bind(this);
         this.onDeleteClick = this.onDeleteClick.bind(this);
         this.onDownloadClick = this.onDownloadClick.bind(this);
+        this.onPrivacyChange = this.onPrivacyChange.bind(this);
 
-        this.password = React.createRef();
+        this.newPassword = React.createRef();
+        this.newPasswordVerify = React.createRef();
         this.message = React.createRef();
         this.setState.preview = React.createRef();
+        this.privacy = React.createRef();
     }
 
     onClose() {
@@ -41,14 +44,40 @@ class SettingPage extends React.Component {
         this.setState({ checked });
     }
 
-    async onUpdateClick() {
+    async onPrivacyChange() {
+        const response = await fetch('/api/user/privacy', {
+            method: 'POST',
+            mode: 'cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token: localStorage.getItem('token'),
+                to: this.privacy.current.value.split(' (')[0].toLowerCase()
+            })
+        });
 
-        const response = await fetch('http://localhost:8000/api/authenticate', {
+        const data = await response.json();
+        if (data.success) {this.props.alert.success('Successfully changed!');}
+        else {this.props.alert.error('Failed to change setting.');}
+    }
+
+    async onUpdateClick() {
+        if (this.newPassword.current.value !== this.newPasswordVerify.current.value) {
+            this.props.alert.error('Passwords do not match.');
+            return;
+        }
+
+        const result = owasp.test(this.newPassword.current.value);
+        if (!result.strong) {
+            this.props.alert.error(result.errors.join('\n'));
+            return;
+        }
+
+        const response = await fetch('/api/authenticate', {
             method: 'PUT',
             mode: 'cors',
             cache: 'no-cache',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: this.password.current.value })
+            body: JSON.stringify({ password: this.newPassword.current.value })
         });
 
         const body = await response.json();
@@ -61,7 +90,6 @@ class SettingPage extends React.Component {
     }
 
     async onUploadClick() {
-        const alert = useAlert();
         const response = await fetch('http://localhost:8000/api/profileImage', {
             method: 'POST',
             mode: 'cors',
@@ -72,41 +100,45 @@ class SettingPage extends React.Component {
 
         const body = await response.json();
         if (!body.success) {alert.error('Failed to upload picture.');}
-        else {alert.success('Success!');}
+        else {this.props.alert.success('Success!');}
     }
 
     async onDeleteClick() {
-        const alert = useAlert();
-        const response = await fetch('http://localhost:8000/api/user', {
+        const response = await fetch('http://localhost:8000/api/user/delete', {
             method: 'POST',
             mode: 'cors',
             cache: 'no-cache',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ profileImage: this.state.preview })
+            body: JSON.stringify({ token: localStorage.getItem('token') })
         });
 
         const body = await response.json();
         if (!body.success) {alert.error('Failed to delete the account.');}
-        else {alert.success('Done, see you again!');}
+        else {
+            localStorage.removeItem('token');
+            this.props.alert.success('Your account has been deleted');
+        }
     }
 
     async onDownloadClick() {
-        const alert = useAlert();
-        const response = await fetch('http://localhost:8000/api/dataDownload', {
+        const response = await fetch('http://localhost:8000/api/user/data', {
             method: 'POST',
             mode: 'cors',
             cache: 'no-cache',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ profileImage: this.state.preview })
+            body: JSON.stringify({ token: localStorage.getItem('token') })
         });
 
         const body = await response.json();
-        if (!body.success) {alert.error('Failed to download the data.');}
-        else {alert.success('download Success!');}
+        if (!body.success) {alert.error('Failed to submit a data request.');}
+        else {
+            this.props.alert.success('A request for a copy of your data has been ' +
+                'successfully submitted. You will receive an email when the data is ready.');
+        }
     }
 
     render() {
-    	if (!this.state.loggedIn) {return <Redirect to='/login' />;}
+        if (!this.state.loggedIn) {return <Redirect to='/login' />;}
 
         return (
             <div>
@@ -128,15 +160,20 @@ class SettingPage extends React.Component {
                     <div className="col-4 col-gap-9" >
                         <h2> Make your profile public? </h2>
                         <div className="row" style={{ marginTop: '10px' }}>
-                            <Switch onChange={this.handleChange} checked={this.state.checked} />
+                            <select onChange={this.onPrivacyChange} ref={this.privacy}>
+                                <option>Private (Default)</option>
+                                <option>Protected (Recommended)</option>
+                                <option>Public (Not recommended)</option>
+                            </select>
                         </div>
                         <h2> Change your password </h2>
                         <div className="row" ref={this.message}></div>
                         <div className="row" style={{ marginTop: '10px' }}>
-                            <input type="password" style={{ width: '16vw' }} placeholder="old password" />
+                            <input type="password" ref={this.newPassword}
+                                style={{ width: '16vw' }} placeholder="old password" />
                         </div>
                         <div className="row" style={{ marginTop: '10px' }}>
-                            <input type="password" ref={this.password} style={{ width: '16vw' }}
+                            <input type="password" ref={this.newPasswordVerify} style={{ width: '16vw' }}
                                 placeholder="new password" />
                         </div>
                         <div className="row" style={{ marginTop: '10px' }}>
@@ -145,11 +182,11 @@ class SettingPage extends React.Component {
                         </div>
                         <div className="row" style={{ marginTop: '10px' }}>
                             <button className="fill" onClick={this.onDeleteClick}
-                                style={{ width: '50%' }}> delete account </button>
+                                style={{ width: '50%' }}> Delete account </button>
                         </div>
                         <div className="row" style={{ marginTop: '10px' }}>
                             <button className="fill" onClick={this.onDownloadClick}
-                                style={{ width: '50%' }}> download personal data </button>
+                                style={{ width: '50%' }}> Request a copy of my data </button>
                         </div>
                     </div>
                 </div>
@@ -158,7 +195,10 @@ class SettingPage extends React.Component {
     }
 }
 
-SettingPage.propTypes = { user: PropTypes.object.isRequired };
+SettingPage.propTypes = {
+    user: PropTypes.object.isRequired,
+    alert: PropTypes.object
+};
 
-export default SettingPage;
+export default withAlert()(SettingPage);
 
